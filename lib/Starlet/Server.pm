@@ -44,6 +44,7 @@ sub new {
         server_ready       => $args{server_ready} || sub {},
         max_reqs_per_child => $args{max_reqs_per_child} || 100,
         max_keepalive_reqs => 1,
+        req_per_sec        => 0,
         is_multiprocess    => Plack::Util::FALSE,
     }, $class;
 
@@ -59,6 +60,7 @@ sub new {
 
 sub run {
     my($self, $app) = @_;
+    $self->server_status('S');
     $self->setup_listener();
     $self->accept_loop($app);
 }
@@ -80,11 +82,13 @@ sub accept_loop {
     # TODO handle $max_reqs_per_child
     my($self, $app, $max_reqs_per_child) = @_;
     my $proc_req_count = 0;
+    my $start_time     = time();
 
     $app = Plack::Middleware::ContentLength->wrap($app);
 
     while (! defined $max_reqs_per_child || $proc_req_count < $max_reqs_per_child) {
         local $SIG{PIPE} = 'IGNORE';
+        $self->server_status('_');
         if (my $conn = $self->{listen_sock}->accept) {
             $conn->setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
                 or die "setsockopt(TCP_NODELAY) failed:$!";
@@ -92,6 +96,7 @@ sub accept_loop {
             while (1) {
                 ++$req_count;
                 ++$proc_req_count;
+                $self->{req_per_sec} = $proc_req_count / (time - $start_time);
                 my $env = {
                     SERVER_PORT => $self->{port},
                     SERVER_NAME => $self->{host},
@@ -118,6 +123,7 @@ sub accept_loop {
                     or last;
                 # TODO add special cases for clients with broken keep-alive support, as well as disabling keep-alive for HTTP/1.0 proxies
             }
+            $self->server_status('C');
             $conn->close;
         }
     }
@@ -132,12 +138,14 @@ sub handle_connection {
     my $can_exit = 1;
     my $term_received = 0;
     local $SIG{TERM} = sub {
+        $self->server_status('G');
         $term_received++;
         exit 0
             if ($is_keepalive && $can_exit) || $term_received > 1;
         # warn "server termination delayed while handling current HTTP request";
     };
     
+    $self->server_status('R' => '?');
     while (1) {
         my $rlen = $self->read_timeout(
             $conn, \$buf, MAX_REQUEST_SIZE - length($buf), length($buf),
@@ -186,6 +194,7 @@ sub handle_connection {
         }
     }
 
+    $self->server_status('W' => $env->{REMOTE_ADDR}, $env->{HTTP_HOST}, $env->{REQUEST_METHOD}, $env->{REQUEST_URI}, $env->{SERVER_PROTOCOL});
     if (ref $res eq 'ARRAY') {
         $self->_handle_response($res, $conn, \$use_keepalive);
     } elsif (ref $res eq 'CODE') {
@@ -308,6 +317,22 @@ sub write_all {
         $off += $ret;
     }
     return length $buf;
+}
+
+# show server-status like apache in ps title
+my @prev_status;
+sub server_status {
+    my ($self, $key, @args) = @_;
+    $ENV{SERVER_STATUS_CLASS} or return;
+
+    if (@args) {
+        @prev_status = @args;
+    } else {
+        @args = @prev_status;
+    }
+
+    my $name = $ENV{SERVER_STATUS_CLASS};
+    $0 = sprintf("server-status[%s] (r/s=%.1f) %s ", $name, $self->{req_per_sec}, $key) . join(" ", @args);
 }
 
 1;
