@@ -347,19 +347,21 @@ sub write_all {
 }
 
 # show server-status like apache in ps title
-my @prev_status;
-sub server_status {
-    my ($self, $key, @args) = @_;
-    $ENV{SERVER_STATUS_CLASS} or return;
-
-    if (@args) {
-        @prev_status = @args;
-    } else {
-        @args = @prev_status;
-    }
-
+BEGIN {
     my $name = $ENV{SERVER_STATUS_CLASS};
-    $0 = sprintf("server-status[%s] (r/s=%.1f) %s ", $name, $self->{req_per_sec}, $key) . join(" ", @args);
+    if ($name) {
+        my $prev_status = "";
+        *server_status = sub {
+            my ($self, $key, $env) = @_;
+            if ($env) {
+                $prev_status = ref($env) ? join(" ", $env->{REMOTE_ADDR}, $env->{HTTP_HOST}, $env->{REQUEST_METHOD}, $env->{REQUEST_URI}, $env->{SERVER_PROTOCOL}) : $env;
+            }
+
+            $0 = sprintf("server-status[%s] (req=%d) %s %s", $name, $self->{req_per_sec}, $key, $prev_status);
+        }
+    } else {
+        *server_status = sub {}
+    }
 }
 
 1;
