@@ -194,7 +194,7 @@ sub handle_connection {
         }
     }
 
-    $self->server_status('W' => $env->{REMOTE_ADDR}, $env->{HTTP_HOST}, $env->{REQUEST_METHOD}, $env->{REQUEST_URI}, $env->{SERVER_PROTOCOL});
+    $self->server_status('W' => $env);
     if (ref $res eq 'ARRAY') {
         $self->_handle_response($res, $conn, \$use_keepalive);
     } elsif (ref $res eq 'CODE') {
