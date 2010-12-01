@@ -1,5 +1,23 @@
 Revision history for Perl extension Starlet
 
+0.13
+	- test compatibilty improvement: ignore proxy setting while running tests (datamuc)
+
+0.12
+	- [bugfix] fix infinite loop when connection is closed while receiving response content (thanks to Jiro Nishiguchi-san)
+
+0.11
+	- suppress the warning "Use of "goto" to jump into a construct is deprecated"
+
+0.10
+	- switch from alarm-based polling to select-based
+	- use TCP_DEFER_ACCEPT on linux
+	- performance tweaks
+
+0.09
+	- [bugfix] enable keepalive when --max-keepalive-reqs=n (n>1) is set
+	- accept --max-workers=n option (for better interoperability w. Starman)
+
 0.08
 	- [bugfix] delay termination (when receiving first SIGTERM or SIGINT) until all HTTP requests are being processed
 
