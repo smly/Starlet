@@ -183,6 +183,7 @@ sub handle_connection {
                 $env->{'psgi.input'} = $null_io;
             }
 
+            $self->server_status('W' => $env);
             $res = Plack::Util::run_app $app, $env;
             last;
         }
